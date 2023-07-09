@@ -15,8 +15,19 @@ contract DecentralizedExchange {
         price = _price;
     }
 
-    function sell() external {
+    modifier onlyOwner() {
+        require(msg.sender == owner, "you are not the owner");
+        _;
+    }
 
+    function sell() external onlyOwner {
+        uint256 allowance = associatedToken.allowance(msg.sender, address(this));
+
+        require(allowance > 0, "you must allow this contract access to at least one token");
+
+        bool sent = associatedToken.transferFrom(msg.sender, address(this), allowance);
+        
+        require(sent, "failed to send");
     }
 
     function withdrawTokens() external {
