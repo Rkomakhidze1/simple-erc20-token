@@ -1,8 +1,13 @@
 const { expect } = require("chai");
 
-describe("Token", () => {
+describe("DecentralizedExchange", () => {
   let tokenSupply = "100";
+
   let token;
+  let dex;
+
+  let price = 100;
+
   let owner;
   let addr1;
   let addr2;
@@ -11,25 +16,83 @@ describe("Token", () => {
     [owner, addr1, addr2] = await ethers.getSigners();
     const Token = await ethers.getContractFactory("Token");
     token = await Token.deploy(tokenSupply);
+
+    const Exchange = await ethers.getContractFactory("DecentralizedExchange");
+    exchange = await Exchange.deploy(token, price);
   });
 
-  describe("Deployment", () => {
-    it("Should assign total supply of tokens to the owner", async () => {
-      const ownerBalance = await token.balanceOf(owner.address);
-      expect(await token.totalSupply()).to.equal(ownerBalance);
+  describe("Sell", () => {
+    it("Should fail if contract is not approved", async () => {
+      await expect(exchange.sell()).to.be.reverted;
+    });
+
+    it("Should allow DecentralizedExchange to transfer tokens", async () => {
+      await token.approve(exchange, 100);
+    });
+
+    it("Should not allow non-owner to call sell()", async () => {
+      await expect(exchange.connect(addr1).sell()).to.be.reverted;
+    });
+
+    it("Sell should transfer tokens from owner to contract", async () => {
+      await expect(exchange.sell()).to.changeTokenBalances(
+        token,
+        [owner, exchange],
+        [-100, 100]
+      );
     });
   });
 
-  describe("Transactions", () => {
-    it("Should transfer tokens between accounts", async () => {
-      await token.transfer(addr1.address, 50);
-      const addr1Balance = await token.balanceOf(addr1.address);
-      expect(addr1Balance).to.equal(50);
+  describe("Getters", () => {
+    it("Should return correct token balance", async () => {
+      expect(await exchange.getTokenBalance()).to.equal(100);
     });
 
-    it("Should revert if balance is not enough", async () => {
-      await expect(token.connect(addr1).transfer(addr2.address, 51)).to.be
-        .reverted;
+    it("Should return correct token price", async () => {
+      expect(await exchange.getPrice(10)).to.equal(price * 10);
+    });
+  });
+
+  describe("Buy", () => {
+    it("User can buy tokens", async () => {
+      await expect(
+        exchange.connect(addr1).buy(10, { value: 1000 })
+      ).to.changeTokenBalances(token, [exchange, addr1], [-10, 10]);
+    });
+
+    it("User cannot buy invalid number of tokens", async () => {
+      await expect(exchange.connect(addr1).buy(91, { value: 9100 })).to.be.reverted;
+    });
+
+    it("User cannot buy with invalid value", async () => {
+      await expect(exchange.connect(addr1).buy(5, { value: 510 })).to.be.reverted;
+    });
+  });
+
+  describe("Withdraw tokens", () => {
+    it("Non-owner cannot withdraw tokens", async () => {
+      await expect(exchange.connect(addr1).withdrawTokens()).to.be.reverted;
+    });
+
+    it("Owner can withdraw tokens", async () => {
+      await expect(exchange.withdrawTokens()).to.changeTokenBalances(
+        token,
+        [exchange, owner],
+        [-90, 90]
+      );
+    });
+  });
+
+  describe("Withdraw funds", () => {
+    it("Owner can withdraw token proceeds", async () => {
+      await expect(exchange.withdrawFunds()).to.changeEtherBalances(
+        [owner, exchange],
+        [1000, -1000]
+      );
+    });
+
+    it("Non-owner cannot withdraw token proceeds", async () => {
+      await expect(exchange.connect(addr1).withdrawFunds()).to.be.reverted;
     });
   });
 });
