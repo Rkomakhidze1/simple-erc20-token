@@ -26,16 +26,8 @@ contract DecentralizedExchange {
         require(allowance > 0, "you must allow this contract access to at least one token");
 
         bool sent = associatedToken.transferFrom(msg.sender, address(this), allowance);
-        
+
         require(sent, "failed to send");
-    }
-
-    function withdrawTokens() external {
-
-    }
-
-    function withdrawFunds() external {
-
     }
 
     function getPrice(uint256 numTokens) public view returns (uint256) {
@@ -44,6 +36,18 @@ contract DecentralizedExchange {
 
     function buy(uint256 numTokens) external payable {
 
+    }
+
+    function withdrawTokens() external onlyOwner {
+        uint256 balance = associatedToken.balanceOf(address(this));
+        associatedToken.transfer(msg.sender, balance);
+    }
+
+    function withdrawFunds() external onlyOwner {
+        (bool sent, ) = payable(msg.sender).call{value: address(this).balance}(
+            ""
+        );
+        require(sent);
     }
 
     function getTokenBalance() public view returns (uint256) {
